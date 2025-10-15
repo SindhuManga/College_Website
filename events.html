@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8">
+  <meta name="description" content="ABC College - Events">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ABC College | Events</title>
+</head>
+<body>
+<header>
+  <img src="assets/logo.png" alt="ABC College Logo" width="56" height="56">
+  <h1>ABC College</h1>
+  <nav>
+    <a href="index.html">Home</a> |
+    <a href="about.html">About</a> |
+    <a href="departments.html">Departments</a> |
+    <a href="courses.html">Courses</a> |
+    <a href="admissions.html">Admissions</a> |
+    <a href="events.html">Events</a> |
+    <a href="placements.html">Placements</a> |
+    <a href="faculty.html">Faculty</a> |
+    <a href="contact.html">Contact</a>
+  </nav>
+  <hr>
+</header>
+
+<main>
+  <section>
+    <h2>Upcoming Events</h2>
+    <ol>
+      <!-- TODO(19): Add three <li> items with <time> exactly as specified -->
+        <strong>Orientation Day</strong>
+        <time datetime="09:00">9 AM</time><br>
+        <strong>Tech Fest</strong>
+        <time datetime="07:00">7 PM</time><br>
+        <strong>Convocation</strong>
+        <time datetime="11:00">11 AM</time><br>
+
+      <!-- TODO(19A) --><!-- TODO(19B) --><!-- TODO(19C) -->
+    </ol>
+  </section>
+
+  <section>
+    <h2>Event Registration</h2>
+    <form action="register_event.html" method="post">
+      <!-- TODO(20): Add select + two inputs + submit exactly as specified -->
+        <label for="event">Choose Event:</label>
+        <select id="event" name="event">
+          <option value="techfest">Tech Fest</option>
+          <option value="workshop">Workshop</option>
+          <option value="seminar">Seminar</option>
+          <option value="sports">Sports</option>
+        </select>
+        <br><br>
+        <label for="fullname">Full Name:</label>
+         <input type="text" id="fullname" name="fullname" required>
+        <br><br>
+        <label for="semester">Semester:</label>
+         <input type="number" id="semester" name="semester" min="1" max="8" required>
+         <br><br>
+        <input type="submit" value="Submit">
+      <!-- TODO(20A) -->
+      <!-- TODO(20B) -->
+      <!-- TODO(20C) -->
+    </form>
+  </section>
+</main>
+
+<footer>
+  <hr>
+  <address>ABC College, Knowledge Avenue, Hyderabad, India • +91-40-1234-5678</address>
+  <p>© 2025 ABC College. All rights reserved.</p>
+</footer>
+
+
+</body></html>

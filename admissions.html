@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8">
+  <meta name="description" content="ABC College - Admissions">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ABC College | Admissions</title>
+</head>
+<body>
+<header>
+  <img src="assets/logo.png" alt="ABC College Logo" width="56" height="56">
+  <h1>ABC College</h1>
+  <nav>
+    <a href="index.html">Home</a> |
+    <a href="about.html">About</a> |
+    <a href="departments.html">Departments</a> |
+    <a href="courses.html">Courses</a> |
+    <a href="admissions.html">Admissions</a> |
+    <a href="events.html">Events</a> |
+    <a href="placements.html">Placements</a> |
+    <a href="faculty.html">Faculty</a> |
+    <a href="contact.html">Contact</a>
+  </nav>
+  <hr>
+</header>
+
+<main>
+  <section>
+    <h2>Admissions 2025</h2>
+    <!-- TODO(13): Insert process image exactly -->
+     <img src="assets/admissions_steps.jpg" alt="admissions_process" width="400">
+    <!-- TODO(13A) -->
+    <p>Applications are invited for UG and PG programs. Read instructions carefully.</p>
+  </section>
+
+  <section>
+    <h2>Application Form</h2>
+    <form action="submit_application.html" method="post">
+      <!-- TODO(14): Add fieldset Personal Details -->
+       <fieldset>
+        <legend>Personal Details</legend>
+        <label for="myname">Name</label>
+        <input type="text" id="myname" name="name">
+        <label for="myemail">Email</label>
+        <input type="email" id="myemail" name="email">
+        <label for="mynumber">Phone</label>
+        <input type="number" id="mynumber" name="phone">
+       </fieldset>
+      <!-- TODO(14A) -->
+      <!-- TODO(14B) -->
+      <!-- TODO(14C) -->
+
+      <!-- TODO(15): Add fieldset Program Preferences (select + datalist) -->
+       <fieldset>
+        <legend>Program Preferences</legend>
+        <label for="program" >Program</label>
+        <select  id="program" name="program">
+           <option>Java</option>
+           <option>CPP</option>
+           <option>Python</option>
+           <option>HTML</option>
+        </select>
+        <label for="intake">Choose Intake:</label>
+        <input list="intake-options" id="intake" name="intake">
+        <datalist id="intake-options">
+           <option value="2023-24">
+           <option value="2024-25">
+           <option value="2025-26">
+           <option value="2026-27">
+        </datalist>
+       </fieldset>
+      <!-- TODO(15A) -->
+      <!-- TODO(15B) -->
+
+      <!-- TODO(16): Add fieldset Other Info (number, checkbox, file) -->
+       <fieldset>
+        <legend>Other Info</legend>
+        <label for="score">EntranceScore</label>
+        <input type="number" id="score" name="score">
+        <label for="hostel">hostelRequired</label>
+        <input type="checkbox" id="hostel" name="hostel">
+        <label for="fileinput">Upload Resume:</label>
+        <input type="file" id="fileinput" name="fileinput">
+       </fieldset>
+      <!-- TODO(16A) -->
+      <!-- TODO(16B) -->
+      <!-- TODO(16C) -->
+
+      <!-- TODO(17): Add submit and reset buttons -->
+       <input type="submit" value="Submit">
+       <input type="reset" value="Reset">
+      <!-- TODO(17A) -->
+      <!-- TODO(17B) -->
+    </form>
+  </section>
+
+  <section>
+    <h2>Application Progress</h2>
+    <!-- TODO(18): Add progress and meter exactly -->
+     <progress value="70" max="100"></progress>
+    <!-- TODO(18A) -->
+     <h2>Seat Filling</h2>
+     <meter value="30" min="0" max="50">30 out of 50</meter>
+    <!-- TODO(18B) -->
+  </section>
+</main>
+
+<footer>
+  <hr>
+  <address>ABC College, Knowledge Avenue, Hyderabad, India • +91-40-1234-5678</address>
+  <p>© 2025 ABC College. All rights reserved.</p>
+</footer>
+
+
+</body></html>
