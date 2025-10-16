@@ -42,7 +42,7 @@ pipeline {
             steps {
                 echo "Pushing image to Docker Hub..."
                 withCredentials([string(credentialsId: 'dockerhub-token', variable: 'DOCKERHUB_TOKEN')]) {
-                    bat "echo %DOCKERHUB_TOKEN% | docker login -u %DOCKERHUB_USERNAME% --password-stdin"
+                    bat 'echo %DOCKERHUB_TOKEN% | docker login -u %DOCKERHUB_USERNAME% --password-stdin'
                     retry(3) {
                         bat "docker push ${IMAGE_NAME}:latest"
                     }
@@ -68,15 +68,18 @@ pipeline {
         stage('Deploy to EC2 via SSM') {
             steps {
                 script {
-                    def instanceIp = bat(script: "terraform output -raw instance_public_ip", returnStdout: true).trim()
-                    echo "Deploying to EC2: ${instanceIp}"
+                    def instanceIp = bat(script: 'terraform output -raw instance_public_ip', returnStdout: true).trim()
+                    def instanceId = bat(script: 'terraform output -raw instance_id', returnStdout: true).trim()
+                    echo "Deploying to EC2: ${instanceIp} (Instance ID: ${instanceId})"
+
+                    // Escaping $ to prevent Groovy interpolation
                     bat """
-                        aws ssm send-command \
-                        --targets "Key=instanceIds,Values=$(terraform output -raw instance_id)" \
-                        --document-name "AWS-RunShellScript" \
-                        --comment "Deploying Docker container" \
-                        --parameters 'commands=["docker run -d -p 80:80 ${ECR_REPO}:latest"]' \
-                        --region eu-north-1
+                    aws ssm send-command ^
+                    --targets "Key=instanceIds,Values=\\${instanceId}" ^
+                    --document-name "AWS-RunShellScript" ^
+                    --comment "Deploying Docker container" ^
+                    --parameters 'commands=["docker run -d -p 80:80 ${ECR_REPO}:latest"]' ^
+                    --region ${AWS_REGION}
                     """
                 }
             }
