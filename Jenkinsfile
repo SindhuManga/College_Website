@@ -5,8 +5,6 @@ pipeline {
         IMAGE_NAME = "sindhu2303/college-website"
         ECR_REPO = "944731154859.dkr.ecr.eu-north-1.amazonaws.com/ecr-repo"
         REGION = "eu-north-1"
-        AWS_CREDENTIALS_ID = "your-aws-credentials-id"
-        DOCKERHUB_TOKEN_ID = "dockerhub-token"
     }
 
     stages {
@@ -22,12 +20,13 @@ pipeline {
             steps {
                 echo "🌱 Running Terraform to create AWS resources..."
                 dir('Terraform') {
-                    withCredentials([[
-                        $class: 'AmazonWebServicesCredentialsBinding',
-                        accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                        secretKeyVariable: 'AWS_SECRET_ACCESS_KEY',
-                        credentialsId: "${AWS_CREDENTIALS_ID}"
-                    ]]) {
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'aws-creds', 
+                            usernameVariable: 'AWS_ACCESS_KEY_ID', 
+                            passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                        )
+                    ]) {
                         bat 'terraform init'
                         bat 'terraform plan -out=tfplan'
                         bat 'terraform apply -auto-approve tfplan'
@@ -46,7 +45,7 @@ pipeline {
         stage('Push Image to Docker Hub') {
             steps {
                 echo "📤 Pushing image to Docker Hub..."
-                withCredentials([string(credentialsId: "${DOCKERHUB_TOKEN_ID}", variable: 'DOCKERHUB_TOKEN')]) {
+                withCredentials([string(credentialsId: 'dockerhub-token', variable: 'DOCKERHUB_TOKEN')]) {
                     bat 'docker login -u sindhu2303 -p %DOCKERHUB_TOKEN%'
                     bat 'docker push %IMAGE_NAME%:latest'
                 }
@@ -56,12 +55,13 @@ pipeline {
         stage('Push Image to AWS ECR') {
             steps {
                 echo "🚀 Pushing image to AWS ECR..."
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY',
-                    credentialsId: "${AWS_CREDENTIALS_ID}"
-                ]]) {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-creds', 
+                        usernameVariable: 'AWS_ACCESS_KEY_ID', 
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    )
+                ]) {
                     retry(3) {
                         bat 'aws ecr get-login-password --region %REGION% | docker login --username AWS --password-stdin %ECR_REPO%'
                         bat 'docker tag %IMAGE_NAME%:latest %ECR_REPO%:latest'
@@ -75,7 +75,6 @@ pipeline {
             steps {
                 echo "🔍 Fetching EC2 instance ID from Terraform output..."
                 script {
-                    // Store Terraform instance ID in a Windows environment variable
                     def instanceId = bat(returnStdout: true, script: 'terraform output -raw instance_id').trim()
                     env.INSTANCE_ID = instanceId
                     echo "EC2 Instance ID: ${env.INSTANCE_ID}"
@@ -86,12 +85,13 @@ pipeline {
         stage('Deploy to EC2 via SSM') {
             steps {
                 echo "🚢 Deploying Docker container to EC2 via SSM..."
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY',
-                    credentialsId: "${AWS_CREDENTIALS_ID}"
-                ]]) {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-creds', 
+                        usernameVariable: 'AWS_ACCESS_KEY_ID', 
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    )
+                ]) {
                     retry(3) {
                         bat """
 aws ssm send-command ^
@@ -112,14 +112,11 @@ aws ssm send-command ^
                 bat 'terraform output'
             }
         }
+
     }
 
     post {
-        success {
-            echo "✅ Pipeline Succeeded!"
-        }
-        failure {
-            echo "❌ Pipeline Failed!"
-        }
+        success { echo "✅ Pipeline Succeeded!" }
+        failure { echo "❌ Pipeline Failed!" }
     }
 }
