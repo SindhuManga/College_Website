@@ -2,26 +2,34 @@ pipeline {
     agent any
 
     environment {
-        // --- AWS / IMAGE CONFIG ---
+        REGION = "eu-north-1"
         IMAGE_NAME = "sindhu2303/college-website"
         ECR_REPO = "944731154859.dkr.ecr.eu-north-1.amazonaws.com/ecr-repo"
-        REGION = "eu-north-1"
-        INSTANCE_NAME = "Terraform-ec2-docker-host" 
-        AWS_CLI = "C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe"
-
-        // Construct the full ECR image URL
+        INSTANCE_NAME = "Terraform-ec2-docker-host"
+        AWS_CLI = "aws"
         ECR_IMAGE_URL = "${ECR_REPO}:latest"
-
-        // --- DEPLOYMENT SCRIPT DEFINITION ---
-        // Define the entire deployment script as a single JSON string for guaranteed passing to SSM
-        DEPLOY_COMMANDS = 'docker stop college-website || true; docker rm college-website || true; aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin 944731154859.dkr.ecr.eu-north-1.amazonaws.com/ecr-repo; docker pull 944731154859.dkr.ecr.eu-north-1.amazonaws.com/ecr-repo:latest; docker run -d -p 80:80 --name college-website 944731154859.dkr.ecr.eu-north-1.amazonaws.com/ecr-repo:latest'
+        DEPLOY_COMMANDS = 'docker stop college-website || true && docker rm college-website || true && aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin 944731154859.dkr.ecr.eu-north-1.amazonaws.com/ecr-repo && docker pull 944731154859.dkr.ecr.eu-north-1.amazonaws.com/ecr-repo:latest && docker run -d -p 80:80 --name college-website 944731154859.dkr.ecr.eu-north-1.amazonaws.com/ecr-repo:latest'
     }
 
     stages {
+
         stage('Clone Repository') {
             steps {
-                echo '📦 Cloning repository...'
+                echo '📦 Cloning Repository...'
                 git branch: 'main', url: 'https://github.com/SindhuManga/College_Website.git'
+            }
+        }
+
+        stage('Terraform Init & Apply') {
+            steps {
+                echo '🌍 Running Terraform to create AWS resources...'
+                withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    dir('Terraform') {
+                        bat 'terraform init'
+                        bat 'terraform plan -out=tfplan'
+                        bat 'terraform apply -auto-approve tfplan'
+                    }
+                }
             }
         }
 
@@ -32,7 +40,7 @@ pipeline {
             }
         }
 
-        stage('Push to Docker Hub') {
+        stage('Push Image to Docker Hub') {
             steps {
                 echo '🚢 Pushing image to Docker Hub...'
                 withCredentials([string(credentialsId: 'dockerhub-token', variable: 'DOCKERHUB_TOKEN')]) {
@@ -41,14 +49,14 @@ pipeline {
             }
         }
 
-        stage('Push to AWS ECR') {
+        stage('Push Image to AWS ECR') {
             steps {
                 echo '🚀 Pushing image to AWS ECR...'
-                withCredentials([usernamePassword(credentialsId: 'aws-ecr-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     bat """
                     set AWS_ACCESS_KEY_ID=%AWS_ACCESS_KEY_ID%
                     set AWS_SECRET_ACCESS_KEY=%AWS_SECRET_ACCESS_KEY%
-                    
+
                     "%AWS_CLI%" ecr get-login-password --region %REGION% | docker login --username AWS --password-stdin %ECR_REPO%
                     docker tag %IMAGE_NAME%:latest %ECR_IMAGE_URL%
                     docker push %ECR_IMAGE_URL%
@@ -56,16 +64,12 @@ pipeline {
                 }
             }
         }
-        
-        stage('Deploy to EC2 (via SSM)') {
+
+        stage('Deploy to EC2 via SSM') {
             steps {
-                echo '🌐 Deploying new image to EC2 via AWS Systems Manager (SSM)...'
-                withCredentials([usernamePassword(credentialsId: 'aws-ecr-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    
-                    // The DEPLOY_COMMANDS variable contains the entire script string, 
-                    // which is now passed cleanly to the SSM send-command parameter.
+                echo '🌐 Deploying new Docker image to EC2 via SSM...'
+                withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     bat """
-                    REM The AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are automatically used by the AWS CLI.
                     "%AWS_CLI%" ssm send-command ^
                         --targets "Key=tag:Name,Values=%INSTANCE_NAME%" ^
                         --document-name "AWS-RunShellScript" ^
@@ -76,14 +80,31 @@ pipeline {
                 }
             }
         }
+
+        stage('Fetch EC2 Public IP & DNS') {
+            steps {
+                echo '🔎 Fetching EC2 Public IP and DNS...'
+                withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    script {
+                        def ip = bat(script: '"%AWS_CLI%" ec2 describe-instances --filters "Name=tag:Name,Values=%INSTANCE_NAME%" --query "Reservations[*].Instances[*].PublicIpAddress" --output text --region %REGION%', returnStdout: true).trim()
+                        def dns = bat(script: '"%AWS_CLI%" ec2 describe-instances --filters "Name=tag:Name,Values=%INSTANCE_NAME%" --query "Reservations[*].Instances[*].PublicDnsName" --output text --region %REGION%', returnStdout: true).trim()
+
+                        echo "✅ EC2 Instance Deployed Successfully!"
+                        echo "🌍 Public IP: ${ip}"
+                        echo "🧭 Public DNS: ${dns}"
+                        echo "💡 Access your app at: http://${ip}"
+                    }
+                }
+            }
+        }
     }
 
     post {
         success {
-            echo '✅ Pipeline complete! Image built and deployed to EC2 successfully!'
+            echo '✅ Pipeline Completed Successfully!'
         }
         failure {
-            echo '❌ Build and deployment failed!'
+            echo '❌ Pipeline Failed!'
         }
     }
 }
