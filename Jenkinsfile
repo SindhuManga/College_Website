@@ -1,9 +1,11 @@
 pipeline {
     agent any
     environment {
-        IMAGE_NAME = "college-website"
+        IMAGE_NAME = "sindhu2303/college-website"
+        DOCKERHUB_USERNAME = credentials('dockerhub-username')
+        DOCKERHUB_TOKEN = credentials('dockerhub-token')
         AWS_REGION = 'eu-north-1'
-        ECR_REPO = '944731154859.dkr.ecr.eu-north-1.amazonaws.com/college-website'
+        ECR_REPO = '944731154859.dkr.ecr.eu-north-1.amazonaws.com/ecr-repo'
     }
     stages {
         stage('Checkout Code') {
@@ -31,7 +33,20 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
+                echo "Building Docker image..."
                 bat "docker build -t ${IMAGE_NAME}:latest ."
+            }
+        }
+
+        stage('Push Docker Image to Docker Hub') {
+            steps {
+                echo "Pushing image to Docker Hub..."
+                withCredentials([string(credentialsId: 'dockerhub-token', variable: 'DOCKERHUB_TOKEN')]) {
+                    bat "echo %DOCKERHUB_TOKEN% | docker login -u %DOCKERHUB_USERNAME% --password-stdin"
+                    retry(3) {
+                        bat "docker push ${IMAGE_NAME}:latest"
+                    }
+                }
             }
         }
 
@@ -45,7 +60,7 @@ pipeline {
                 ]]) {
                     bat "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO}"
                     bat "docker tag ${IMAGE_NAME}:latest ${ECR_REPO}:latest"
-                    retry(3) { bat "docker push ${ECR_REPO}:latest" }
+                    bat "docker push ${ECR_REPO}:latest"
                 }
             }
         }
@@ -53,17 +68,15 @@ pipeline {
         stage('Deploy to EC2 via SSM') {
             steps {
                 script {
-                    // Fetch Terraform outputs
-                    def instanceId = bat(script: "terraform output -raw instance_id", returnStdout: true).trim()
-                    echo "Deploying Docker container to EC2 instance: ${instanceId}"
-
-                    // Run container on EC2 via SSM
+                    def instanceIp = bat(script: "terraform output -raw instance_public_ip", returnStdout: true).trim()
+                    echo "Deploying to EC2: ${instanceIp}"
                     bat """
-                        aws ssm send-command ^
-                        --targets "Key=InstanceIds,Values=${instanceId}" ^
-                        --document-name "AWS-RunShellScript" ^
-                        --comment "Deploy Docker container" ^
-                        --parameters "commands=[\\"docker run -d -p 80:80 ${ECR_REPO}:latest\\"]"
+                        aws ssm send-command \
+                        --targets "Key=instanceIds,Values=$(terraform output -raw instance_id)" \
+                        --document-name "AWS-RunShellScript" \
+                        --comment "Deploying Docker container" \
+                        --parameters 'commands=["docker run -d -p 80:80 ${ECR_REPO}:latest"]' \
+                        --region eu-north-1
                     """
                 }
             }
@@ -71,7 +84,11 @@ pipeline {
     }
 
     post {
-        success { echo "Pipeline completed successfully!" }
-        failure { echo "Pipeline failed!" }
+        success {
+            echo "Pipeline Completed Successfully!"
+        }
+        failure {
+            echo "Pipeline Failed!"
+        }
     }
 }
