@@ -7,7 +7,7 @@ pipeline {
         REGION = "eu-north-1"
         AWS_CLI = "C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe"
         INSTANCE_NAME = "Terraform-ec2-docker-host" 
-        # Define the full ECR image URL here for clean use later
+        // Define the full ECR image URL here for clean use later
         ECR_IMAGE_URL = "${ECR_REPO}:latest"
     }
 
@@ -56,7 +56,6 @@ pipeline {
             }
         }
         
-        // --- THIS STAGE HAS THE CRITICAL BATCH SYNTAX FIX ---
         stage('Deploy to EC2 (via SSM)') {
             steps {
                 echo '🌐 Deploying new image to EC2 via AWS Systems Manager (SSM)...'
