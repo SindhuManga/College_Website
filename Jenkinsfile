@@ -1,59 +1,38 @@
 pipeline {
     agent any
+
     environment {
         IMAGE_NAME = "sindhu2303/college-website"
-        DOCKERHUB_USERNAME = "sindhu2303"
+        ECR_REPO   = "944731154859.dkr.ecr.eu-north-1.amazonaws.com/college-website"
+        REGION     = "eu-north-1"
+        AWS_CLI    = "C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe"
+        TERRAFORM  = "C:\\terraform_1.13.3_windows_386\\terraform.exe"
         DOCKERHUB_TOKEN = credentials('dockerhub-token')
-        AWS_REGION = 'eu-north-1'
-        ECR_REPO = '944731154859.dkr.ecr.eu-north-1.amazonaws.com/ecr-repo'
-        TERRAFORM = 'C:\\terraform_1.13.3_windows_386\\terraform.exe'
     }
 
     stages {
-        stage('Checkout Code') {
+        stage('Clone Repository') {
             steps {
+                echo '📦 Cloning repository...'
                 git branch: 'main', url: 'https://github.com/SindhuManga/College_Website.git'
-            }
-        }
-
-        stage('Terraform Init & Apply') {
-            steps {
-                withCredentials([[ 
-                        $class: 'AmazonWebServicesCredentialsBinding',
-                        accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                        secretKeyVariable: 'AWS_SECRET_ACCESS_KEY',
-                        credentialsId: 'aws-creds'
-                    ]]){
-                dir('Terraform') 
-                     {
-                        bat """
-                            set AWS_ACCESS_KEY_ID=%AWS_ACCESS_KEY_ID%
-                            set AWS_SECRET_ACCESS_KEY=%AWS_SECRET_ACCESS_KEY%
-                            "%TERRAFORM%" init
-                            "%TERRAFORM%" plan -out=tfplan
-                            "%TERRAFORM%" apply -auto-approve tfplan
-                        """
-                    }
-                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                echo "Building Docker image..."
+                echo '🐳 Building Docker image...'
                 bat "docker build -t %IMAGE_NAME%:latest ."
             }
         }
-        stage('Push Docker Image to AWS ECR') {
+
+        stage('Push to AWS ECR') {
             steps {
-                withCredentials([[ 
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY',
-                    credentialsId: 'aws-creds'
-                ]]) {
+                echo '🚀 Pushing image to AWS ECR...'
+                withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     bat """
-                        aws ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin %ECR_REPO%
+                        set AWS_ACCESS_KEY_ID=%AWS_ACCESS_KEY_ID%
+                        set AWS_SECRET_ACCESS_KEY=%AWS_SECRET_ACCESS_KEY%
+                        "%AWS_CLI%" ecr get-login-password --region %REGION% | docker login --username AWS --password-stdin %ECR_REPO%
                         docker tag %IMAGE_NAME%:latest %ECR_REPO%:latest
                         docker push %ECR_REPO%:latest
                     """
@@ -61,20 +40,18 @@ pipeline {
             }
         }
 
-        stage('Deploy to EC2 via SSM') {
+        stage('Deploy with Terraform') {
             steps {
-                script {
-                    bat """
-                        for /f %%i in ('"%TERRAFORM%" output -raw instance_public_ip') do set INSTANCE_IP=%%i
-                        for /f %%j in ('"%TERRAFORM%" output -raw instance_id') do set INSTANCE_ID=%%j
-                        echo Deploying to EC2: %INSTANCE_IP%
-                        aws ssm send-command ^
-                        --targets "Key=instanceIds,Values=%INSTANCE_ID%" ^
-                        --document-name "AWS-RunShellScript" ^
-                        --comment "Deploying Docker container" ^
-                        --parameters "commands=[\\"docker run -d -p 80:80 %ECR_REPO%:latest\\"]" ^
-                        --region %AWS_REGION%
-                    """
+                echo '🏗️ Deploying EC2 instance with Docker container...'
+                withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    dir('Terraform') {
+                        bat """
+                        set AWS_ACCESS_KEY_ID=%AWS_ACCESS_KEY_ID%
+                        set AWS_SECRET_ACCESS_KEY=%AWS_SECRET_ACCESS_KEY%
+                        "%TERRAFORM%" init
+                        "%TERRAFORM%" apply -auto-approve
+                        """
+                    }
                 }
             }
         }
@@ -82,10 +59,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Pipeline Completed Successfully!"
+            echo '✅ Docker image pushed, EC2 deployed, and container running!'
         }
         failure {
-            echo "❌ Pipeline Failed!"
+            echo '❌ Build or deployment failed!'
         }
     }
 }

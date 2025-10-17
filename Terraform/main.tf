@@ -11,17 +11,20 @@ resource "aws_iam_role" "ec2_role" {
     Statement = [{
       Action    = "sts:AssumeRole"
       Effect    = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
-      }
+      Principal = { Service = "ec2.amazonaws.com" }
     }]
   })
 }
 
-# Attach Full EC2 Access Policy
+# Attach EC2 & ECR Access
 resource "aws_iam_role_policy_attachment" "ec2_policy_attach" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "ecr_policy_attach" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
 }
 
 # Instance Profile
@@ -59,7 +62,7 @@ resource "aws_security_group" "web_sg" {
   }
 }
 
-# EC2 Instance
+# EC2 AMI
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
@@ -70,6 +73,7 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
+# EC2 Instance
 resource "aws_instance" "docker_host" {
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.instance_type
@@ -88,5 +92,12 @@ resource "aws_instance" "docker_host" {
     sudo systemctl start docker
     sudo systemctl enable docker
     sudo usermod -a -G docker ec2-user
+
+    # Login to ECR
+    aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${var.ecr_repo}
+
+    # Pull and run Docker image
+    docker pull ${var.ecr_repo}:latest
+    docker run -d -p 80:80 ${var.ecr_repo}:latest
   EOT
 }
