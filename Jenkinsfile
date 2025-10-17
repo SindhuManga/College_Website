@@ -1,6 +1,5 @@
 pipeline {
     agent any
-
     environment {
         IMAGE_NAME = "sindhu2303/college-website"
         DOCKERHUB_USERNAME = "sindhu2303"
@@ -11,7 +10,6 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout Code') {
             steps {
                 git branch: 'main', url: 'https://github.com/SindhuManga/College_Website.git'
@@ -21,15 +19,20 @@ pipeline {
         stage('Terraform Init & Apply') {
             steps {
                 dir('Terraform') {
-                    withCredentials([[
+                    withCredentials([[ 
                         $class: 'AmazonWebServicesCredentialsBinding',
                         accessKeyVariable: 'AWS_ACCESS_KEY_ID',
                         secretKeyVariable: 'AWS_SECRET_ACCESS_KEY',
                         credentialsId: 'aws-creds'
                     ]]) {
-                        bat "${TERRAFORM} init"
-                        bat "${TERRAFORM} plan -out=tfplan"
-                        bat "${TERRAFORM} apply -auto-approve tfplan"
+                        // Confirm Terraform path
+                        bat 'where terraform'
+                        echo "Running Terraform from ${TERRAFORM}"
+
+                        // Run using full path
+                        bat "\"${TERRAFORM}\" init"
+                        bat "\"${TERRAFORM}\" plan -out=tfplan"
+                        bat "\"${TERRAFORM}\" apply -auto-approve tfplan"
                     }
                 }
             }
@@ -56,7 +59,7 @@ pipeline {
 
         stage('Push Docker Image to AWS ECR') {
             steps {
-                withCredentials([[
+                withCredentials([[ 
                     $class: 'AmazonWebServicesCredentialsBinding',
                     accessKeyVariable: 'AWS_ACCESS_KEY_ID',
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY',
@@ -71,23 +74,17 @@ pipeline {
 
         stage('Deploy to EC2 via SSM') {
             steps {
-                dir('Terraform') { // ✅ Run inside Terraform directory
-                    script {
-                        def instanceIp = bat(script: "${TERRAFORM} output -raw instance_public_ip", returnStdout: true).trim()
-                        def instanceId = bat(script: "${TERRAFORM} output -raw instance_id", returnStdout: true).trim()
-
-                        echo "Deploying to EC2: ${instanceIp}"
-
-                        bat """
-                            aws ssm send-command ^
-                            --targets "Key=instanceIds,Values=${instanceId}" ^
-                            --document-name "AWS-RunShellScript" ^
-                            --comment "Deploying Docker container" ^
-                            --parameters "commands=[\\"docker stop \$(docker ps -q) || true; docker run -d -p 80:80 ${ECR_REPO}:latest\\"]" ^
-                            --region ${AWS_REGION}
-                        """
-                        echo "App deployed successfully! Visit: http://${instanceIp}"
-                    }
+                script {
+                    def instanceIp = bat(script: 'terraform output -raw instance_public_ip', returnStdout: true).trim()
+                    echo "Deploying to EC2: ${instanceIp}"
+                    bat """
+                        aws ssm send-command ^
+                        --targets "Key=instanceIds,Values=$(terraform output -raw instance_id)" ^
+                        --document-name "AWS-RunShellScript" ^
+                        --comment "Deploying Docker container" ^
+                        --parameters "commands=[\\"docker run -d -p 80:80 ${ECR_REPO}:latest\\"]" ^
+                        --region ${AWS_REGION}
+                    """
                 }
             }
         }
@@ -95,10 +92,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Pipeline Completed Successfully!"
+            echo "Pipeline Completed Successfully!"
         }
         failure {
-            echo "❌ Pipeline Failed!"
+            echo "Pipeline Failed!"
         }
     }
 }
