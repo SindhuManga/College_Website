@@ -1,14 +1,53 @@
 provider "aws" {
-  region = "eu-north-1"
+  region = var.region
+}
+
+# IAM Role for EC2
+resource "aws_iam_role" "ec2_role" {
+  name = "Terraform-EC2-Role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+    }]
+  })
+}
+
+# Attach EC2 & ECR Access
+resource "aws_iam_role_policy_attachment" "ec2_policy_attach" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "ecr_policy_attach" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
+}
+
+# Instance Profile
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "Terraform-Instance-Profile"
+  role = aws_iam_role.ec2_role.name
 }
 
 # Security Group
 resource "aws_security_group" "web_sg" {
-  name        = "terraform-web-sg"
-  description = "Allow HTTP traffic"
-  vpc_id      = var.vpc_id  # Replace with your VPC ID
+  name        = "web_server_sg"
+  description = "Allow HTTP and SSH traffic"
 
   ingress {
+    description = "Allow SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Allow HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -21,59 +60,29 @@ resource "aws_security_group" "web_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+}
 
-  tags = {
-    Name = "Terraform-Web-SG"
+# EC2 AMI
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
-}
-
-# IAM Role for EC2
-resource "aws_iam_role" "ec2_role" {
-  name = "Terraform-EC2-Role"
-
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Action": "sts:AssumeRole",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Effect": "Allow",
-      "Sid": ""
-    }
-  ]
-}
-EOF
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_policy_attach" {
-  role       = aws_iam_role.ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
-}
-
-resource "aws_iam_role_policy_attachment" "ecr_policy_attach" {
-  role       = aws_iam_role.ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
-}
-
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "Terraform-Instance-Profile"
-  role = aws_iam_role.ec2_role.name
 }
 
 # EC2 Instance
 resource "aws_instance" "docker_host" {
-  ami                         = data.aws_ami.amazon_linux.id
-  instance_type               = var.instance_type
-  key_name                    = var.key_name
-  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
-  vpc_security_group_ids      = [aws_security_group.web_sg.id]
-  associate_public_ip_address = true   # ✅ Important!
+  ami                    = data.aws_ami.amazon_linux.id
+  instance_type          = var.instance_type
+  key_name               = var.key_name
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
 
   tags = {
-    Name = "Terraform-EC2-Docker-Host"
+    Name = "Terraform-ec2-docker-host"
   }
 
   user_data = <<-EOT
@@ -85,12 +94,10 @@ resource "aws_instance" "docker_host" {
     sudo usermod -a -G docker ec2-user
 
     # Login to ECR
-    aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin 944731154859.dkr.ecr.eu-north-1.amazonaws.com/ecr-repo
+    aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${var.ecr_repo}
 
     # Pull and run Docker image
-    docker pull 944731154859.dkr.ecr.eu-north-1.amazonaws.com/ecr-repo:latest
-    docker run -d -p 80:80 944731154859.dkr.ecr.eu-north-1.amazonaws.com/ecr-repo:latest
+    docker pull ${var.ecr_repo}:latest
+    docker run -d -p 80:80 ${var.ecr_repo}:latest
   EOT
 }
-
-
