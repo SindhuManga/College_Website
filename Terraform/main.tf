@@ -16,7 +16,7 @@ resource "aws_iam_role" "ec2_role" {
   })
 }
 
-# Attach EC2 & ECR Policies
+# Attach EC2 & ECR Access
 resource "aws_iam_role_policy_attachment" "ec2_policy_attach" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
@@ -86,20 +86,36 @@ resource "aws_instance" "docker_host" {
   }
 
   user_data = <<-EOT
-              #!/bin/bash
-              sudo yum update -y
-              sudo amazon-linux-extras install docker -y
-              sudo systemctl start docker
-              sudo systemctl enable docker
-              sudo usermod -a -G docker ec2-user
+    #!/bin/bash
+    sudo yum update -y
+    sudo amazon-linux-extras install docker -y
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    sudo usermod -a -G docker ec2-user
+    sleep 10
 
-              # Login to ECR
-              aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${var.ecr_repo}
+    # Create systemd service for Docker container
+    sudo tee /etc/systemd/system/college-website.service > /dev/null <<EOF
+[Unit]
+Description=College Website Docker Container
+After=docker.service
+Requires=docker.service
 
-              # Pull and run Docker image
-              docker pull ${var.ecr_repo}:latest
-              docker run -d -p 80:80 ${var.ecr_repo}:latest
-              EOT
+[Service]
+Type=simple
+Restart=always
+ExecStart=/usr/bin/bash -c '
+  aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${var.ecr_repo}
+  docker pull ${var.ecr_repo}:latest
+  docker run --rm -p 80:80 ${var.ecr_repo}:latest
+'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable college-website.service
+    sudo systemctl start college-website.service
+  EOT
 }
-
-
