@@ -48,7 +48,7 @@ pipeline {
                         bat """
                         set AWS_ACCESS_KEY_ID=%AWS_ACCESS_KEY_ID%
                         set AWS_SECRET_ACCESS_KEY=%AWS_SECRET_ACCESS_KEY%
-                        "%TERRAFORM%" init
+                        "%TERRAFORM%" init -input=false
                         "%TERRAFORM%" apply -auto-approve
                         """
                     }
@@ -59,7 +59,7 @@ pipeline {
 
     post {
         success {
-            echo '✅ Docker image pushed, EC2 deployed, and container running!'
+            echo '✅ Docker image pushed, EC2 deployed, and container running! Your website should be live at the public IP.'
         }
         failure {
             echo '❌ Build or deployment failed!'

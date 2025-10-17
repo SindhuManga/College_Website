@@ -16,7 +16,7 @@ resource "aws_iam_role" "ec2_role" {
   })
 }
 
-# Attach EC2 & ECR Access
+# Attach EC2 & ECR Policies
 resource "aws_iam_role_policy_attachment" "ec2_policy_attach" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
@@ -86,18 +86,20 @@ resource "aws_instance" "docker_host" {
   }
 
   user_data = <<-EOT
-    #!/bin/bash
-    sudo yum update -y
-    sudo amazon-linux-extras install docker -y
-    sudo systemctl start docker
-    sudo systemctl enable docker
-    sudo usermod -a -G docker ec2-user
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras install docker -y
+              sudo systemctl start docker
+              sudo systemctl enable docker
+              sudo usermod -a -G docker ec2-user
 
-    # Login to ECR
-    aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${var.ecr_repo}
+              # Login to ECR
+              aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${var.ecr_repo}
 
-    # Pull and run Docker image
-    docker pull ${var.ecr_repo}:latest
-    docker run -d -p 80:80 ${var.ecr_repo}:latest
-  EOT
+              # Pull and run Docker image
+              docker pull ${var.ecr_repo}:latest
+              docker run -d -p 80:80 ${var.ecr_repo}:latest
+              EOT
 }
+
+
