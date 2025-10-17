@@ -18,13 +18,14 @@ pipeline {
 
         stage('Terraform Init & Apply') {
             steps {
-                dir('Terraform') {
-                    withCredentials([[ 
+                withCredentials([[ 
                         $class: 'AmazonWebServicesCredentialsBinding',
                         accessKeyVariable: 'AWS_ACCESS_KEY_ID',
                         secretKeyVariable: 'AWS_SECRET_ACCESS_KEY',
                         credentialsId: 'aws-creds'
-                    ]]) {
+                    ]]){
+                dir('Terraform') 
+                     {
                         bat """
                             set AWS_ACCESS_KEY_ID=%AWS_ACCESS_KEY_ID%
                             set AWS_SECRET_ACCESS_KEY=%AWS_SECRET_ACCESS_KEY%
@@ -43,19 +44,6 @@ pipeline {
                 bat "docker build -t %IMAGE_NAME%:latest ."
             }
         }
-
-        stage('Push Docker Image to Docker Hub') {
-            steps {
-                echo "Pushing image to Docker Hub..."
-                withCredentials([string(credentialsId: 'dockerhub-token', variable: 'DOCKERHUB_TOKEN')]) {
-                    bat """
-                        echo %DOCKERHUB_TOKEN% | docker login -u %DOCKERHUB_USERNAME% --password-stdin
-                        docker push %IMAGE_NAME%:latest
-                    """
-                }
-            }
-        }
-
         stage('Push Docker Image to AWS ECR') {
             steps {
                 withCredentials([[ 
