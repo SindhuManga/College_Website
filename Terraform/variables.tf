@@ -19,5 +19,5 @@ variable "region" {
 variable "ecr_repo" {
   description = "ECR repository URL"
   type        = string
-  default     = "944731154859.dkr.ecr.eu-north-1.amazonaws.com/college-website"
+  default     = "944731154859.dkr.ecr.eu-north-1.amazonaws.com/ecr-repo"
 }
