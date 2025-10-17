@@ -2,10 +2,9 @@ provider "aws" {
   region = var.region
 }
 
-# IAM Role for EC2
+# IAM Role for EC2 (with EC2 + ECR permissions)
 resource "aws_iam_role" "ec2_role" {
   name = "Terraform-EC2-Role"
-
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -16,7 +15,6 @@ resource "aws_iam_role" "ec2_role" {
   })
 }
 
-# Attach EC2 & ECR Access
 resource "aws_iam_role_policy_attachment" "ec2_policy_attach" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
@@ -27,7 +25,6 @@ resource "aws_iam_role_policy_attachment" "ecr_policy_attach" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
 }
 
-# Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "Terraform-Instance-Profile"
   role = aws_iam_role.ec2_role.name
@@ -39,7 +36,6 @@ resource "aws_security_group" "web_sg" {
   description = "Allow HTTP and SSH traffic"
 
   ingress {
-    description = "Allow SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -47,7 +43,6 @@ resource "aws_security_group" "web_sg" {
   }
 
   ingress {
-    description = "Allow HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -62,7 +57,7 @@ resource "aws_security_group" "web_sg" {
   }
 }
 
-# EC2 AMI
+# Latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
@@ -73,7 +68,7 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
-# EC2 Instance
+# EC2 Instance with systemd service for Docker container
 resource "aws_instance" "docker_host" {
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.instance_type
@@ -92,27 +87,27 @@ resource "aws_instance" "docker_host" {
     sudo systemctl start docker
     sudo systemctl enable docker
     sudo usermod -a -G docker ec2-user
-    sleep 10
+    sleep 15
 
-    # Create systemd service for Docker container
     sudo tee /etc/systemd/system/college-website.service > /dev/null <<EOF
-[Unit]
-Description=College Website Docker Container
-After=docker.service
-Requires=docker.service
+    [Unit]
+    Description=College Website Docker Container
+    After=docker.service
+    Requires=docker.service
 
-[Service]
-Type=simple
-Restart=always
-ExecStart=/usr/bin/bash -c '
-  aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${var.ecr_repo}
-  docker pull ${var.ecr_repo}:latest
-  docker run --rm -p 80:80 ${var.ecr_repo}:latest
-'
+    [Service]
+    Type=simple
+    Restart=always
+    ExecStart=/bin/bash -c '
+      aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${var.ecr_repo}
+      docker pull ${var.ecr_repo}:latest
+      docker run -d -p 80:80 ${var.ecr_repo}:latest
+    '
+    ExecStop=/usr/bin/docker stop $(/usr/bin/docker ps -q --filter ancestor=${var.ecr_repo}:latest)
 
-[Install]
-WantedBy=multi-user.target
-EOF
+    [Install]
+    WantedBy=multi-user.target
+    EOF
 
     sudo systemctl daemon-reload
     sudo systemctl enable college-website.service

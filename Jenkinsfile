@@ -7,7 +7,6 @@ pipeline {
         REGION     = "eu-north-1"
         AWS_CLI    = "C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe"
         TERRAFORM  = "C:\\terraform_1.13.3_windows_386\\terraform.exe"
-        DOCKERHUB_TOKEN = credentials('dockerhub-token')
     }
 
     stages {
@@ -43,15 +42,11 @@ pipeline {
         stage('Deploy with Terraform') {
             steps {
                 echo '🏗️ Deploying EC2 instance with Docker container...'
-                withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    dir('Terraform') {
-                        bat """
-                        set AWS_ACCESS_KEY_ID=%AWS_ACCESS_KEY_ID%
-                        set AWS_SECRET_ACCESS_KEY=%AWS_SECRET_ACCESS_KEY%
+                dir('Terraform') {
+                    bat """
                         "%TERRAFORM%" init
                         "%TERRAFORM%" apply -auto-approve
-                        """
-                    }
+                    """
                 }
             }
         }
