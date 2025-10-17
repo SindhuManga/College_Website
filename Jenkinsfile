@@ -73,21 +73,22 @@ pipeline {
         }
 
         stage('Deploy to EC2 via SSM') {
-            steps {
-                script {
-                    def instanceIp = bat(script: 'terraform output -raw instance_public_ip', returnStdout: true).trim()
-                    echo "Deploying to EC2: ${instanceIp}"
-                    bat """
-                        aws ssm send-command ^
-                        --targets "Key=instanceIds,Values=$(terraform output -raw instance_id)" ^
-                        --document-name "AWS-RunShellScript" ^
-                        --comment "Deploying Docker container" ^
-                        --parameters "commands=[\\"docker run -d -p 80:80 ${ECR_REPO}:latest\\"]" ^
-                        --region ${AWS_REGION}
-                    """
-                }
-            }
+    steps {
+        script {
+            def instanceIp = bat(script: 'terraform output -raw instance_public_ip', returnStdout: true).trim()
+            echo "Deploying to EC2: ${instanceIp}"
+            bat """
+                aws ssm send-command ^
+                --targets "Key=instanceIds,Values=\$(terraform output -raw instance_id)" ^
+                --document-name "AWS-RunShellScript" ^
+                --comment "Deploying Docker container" ^
+                --parameters "commands=[\\"docker run -d -p 80:80 ${ECR_REPO}:latest\\"]" ^
+                --region ${AWS_REGION}
+            """
         }
+    }
+}
+
     }
 
     post {
